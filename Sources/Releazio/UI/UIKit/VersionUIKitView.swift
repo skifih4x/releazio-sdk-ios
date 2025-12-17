@@ -151,9 +151,11 @@ public class VersionUIKitView: UIView {
             // Update button (black button on the right)
             updateButton.leadingAnchor.constraint(equalTo: versionContainer.trailingAnchor, constant: 12),
             updateButton.trailingAnchor.constraint(equalTo: trailingAnchor),
-            updateButton.centerYAnchor.constraint(equalTo: versionContainer.centerYAnchor),
+            updateButton.topAnchor.constraint(equalTo: topAnchor),
+            updateButton.bottomAnchor.constraint(equalTo: bottomAnchor),
             updateButton.heightAnchor.constraint(equalToConstant: 44),
             
+            // Equal widths for both elements
             versionContainer.widthAnchor.constraint(equalTo: updateButton.widthAnchor)
         ])
     }

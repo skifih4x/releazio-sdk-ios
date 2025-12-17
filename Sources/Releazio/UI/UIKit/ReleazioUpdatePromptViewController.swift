@@ -17,6 +17,12 @@ public class ReleazioUpdatePromptViewController: UIViewController {
     /// Update state from checkUpdates()
     public let updateState: UpdateState
     
+    /// Update prompt style
+    public let style: UpdatePromptStyle
+    
+    /// Theme configuration
+    private let theme: UpdatePromptUIKitTheme
+    
     /// Custom colors for component
     private let customColors: UIComponentColors?
     
@@ -141,6 +147,7 @@ public class ReleazioUpdatePromptViewController: UIViewController {
     /// Initialize update prompt view controller
     /// - Parameters:
     ///   - updateState: Update state from checkUpdates()
+    ///   - style: Update prompt style (default: .native)
     ///   - customColors: Custom colors for buttons and text (optional)
     ///   - customStrings: Custom localization strings (optional)
     ///   - onUpdate: Update action
@@ -149,6 +156,7 @@ public class ReleazioUpdatePromptViewController: UIViewController {
     ///   - onInfoTap: Info button action (opens post_url)
     public init(
         updateState: UpdateState,
+        style: UpdatePromptStyle = .default,
         customColors: UIComponentColors? = nil,
         customStrings: UILocalizationStrings? = nil,
         onUpdate: (() -> Void)? = nil,
@@ -157,6 +165,9 @@ public class ReleazioUpdatePromptViewController: UIViewController {
         onInfoTap: (() -> Void)? = nil
     ) {
         self.updateState = updateState
+        self.style = style
+        // Auto-detect color scheme from trait collection will be done in viewDidLoad
+        self.theme = UpdatePromptUIKitTheme(style: style, colorScheme: .light)
         self.customColors = customColors
         self.customStrings = customStrings
         // Auto-detect locale from system
@@ -186,6 +197,13 @@ public class ReleazioUpdatePromptViewController: UIViewController {
     // MARK: - Setup
     
     private func setupUI() {
+        if style == .inAppUpdate {
+            setupInAppUpdateStyle()
+        } else {
+            setupNativeStyle()
+        }
+    }
+    private func setupNativeStyle() {
         // Set texts from custom strings or localization
         titleLabel.text = updateTitle
         let message = updateState.channelData.updateMessage.isEmpty ? updateMessage : updateState.channelData.updateMessage
@@ -196,7 +214,7 @@ public class ReleazioUpdatePromptViewController: UIViewController {
         updateButton.backgroundColor = updateButtonColor
         
         skipButton.setTitle(skipButtonText + " (\(remainingSkipAttempts))", for: .normal)
-        skipButton.setTitleColor(.secondaryLabel, for: .normal)
+        skipButton.setTitleColor(.lightGray, for: .normal)
         skipButton.backgroundColor = .clear
         
         view.addSubview(overlayView)
@@ -230,15 +248,141 @@ public class ReleazioUpdatePromptViewController: UIViewController {
             containerView.addSubview(skipButton)
         }
         
-        setupConstraints()
+        setupNativeConstraints()
     }
-    
-    private func setupConstraints() {
+    private func setupInAppUpdateStyle() {
+        // Set texts
+        titleLabel.text = updateTitle
+        let message = updateState.channelData.updateMessage.isEmpty ? updateMessage : updateState.channelData.updateMessage
+        messageLabel.text = message
+        
+        // Configure buttons
+        updateButton.setTitle(updateButtonText, for: .normal)
+        updateButton.setTitleColor(updateButtonTextColor, for: .normal)
+        updateButton.backgroundColor = updateButtonColor
+        updateButton.layer.cornerRadius = 14
+        updateButton.titleLabel?.font = .systemFont(ofSize: 18, weight: .semibold)
+        
+        skipButton.setTitle(skipButtonText + " (\(remainingSkipAttempts))", for: .normal)
+        skipButton.setTitleColor(theme.secondaryTextColor, for: .normal)
+        skipButton.backgroundColor = .clear
+        
+        // Setup full-screen view with white background
+        view.backgroundColor = .white
+        
+        // Top header with buttons
+        let topHeaderStack = UIStackView()
+        topHeaderStack.axis = .horizontal
+        topHeaderStack.alignment = .center
+        topHeaderStack.distribution = .fill
+        topHeaderStack.spacing = 12
+        topHeaderStack.translatesAutoresizingMaskIntoConstraints = false
+        
+        // Info button (left)
+        if updateState.channelData.postUrl != nil {
+            let infoBtn = UIButton(type: .system)
+            infoBtn.setImage(UIImage(systemName: "questionmark.circle"), for: .normal)
+            infoBtn.tintColor = theme.closeButtonColor
+            infoBtn.addTarget(self, action: #selector(infoTapped), for: .touchUpInside)
+            topHeaderStack.addArrangedSubview(infoBtn)
+        } else {
+            topHeaderStack.addArrangedSubview(UIView())
+        }
+        
+        topHeaderStack.addArrangedSubview(UIView()) // Spacer
+        
+        // Close button (right, only for type 2)
+        if updateState.updateType == 2 {
+            let closeBtn = UIButton(type: .system)
+            closeBtn.setImage(UIImage(systemName: "xmark"), for: .normal)
+            closeBtn.tintColor = theme.closeButtonColor
+            closeBtn.addTarget(self, action: #selector(closeTapped), for: .touchUpInside)
+            topHeaderStack.addArrangedSubview(closeBtn)
+        } else {
+            topHeaderStack.addArrangedSubview(UIView())
+        }
+        
+        view.addSubview(topHeaderStack)
+        
+        // Rocket icon
+        let rocketImageView = UIImageView()
+        rocketImageView.image = UIImage(named: "rocket", in: Bundle.module, compatibleWith: nil)
+        rocketImageView.contentMode = .scaleAspectFit
+        rocketImageView.translatesAutoresizingMaskIntoConstraints = false
+        
+        // Content area with rocket, title and message
+        let contentStack = UIStackView()
+        contentStack.axis = .vertical
+        contentStack.alignment = .center
+        contentStack.spacing = 20
+        contentStack.translatesAutoresizingMaskIntoConstraints = false
+        
+        contentStack.addArrangedSubview(rocketImageView)
+        
+        titleLabel.textAlignment = .center
+        titleLabel.textColor = theme.textColor
+        titleLabel.font = .systemFont(ofSize: 20, weight: .bold)
+        contentStack.addArrangedSubview(titleLabel)
+        
+        messageLabel.textAlignment = .center
+        messageLabel.textColor = theme.secondaryTextColor
+        messageLabel.font = .systemFont(ofSize: 16, weight: .semibold)
+        messageLabel.numberOfLines = 0
+        contentStack.addArrangedSubview(messageLabel)
+        
+        view.addSubview(contentStack)
+        
+        // Buttons stack at bottom
+        let buttonsStack = UIStackView()
+        buttonsStack.axis = .vertical
+        buttonsStack.alignment = .center
+        buttonsStack.spacing = 12
+        buttonsStack.translatesAutoresizingMaskIntoConstraints = false
+        
+        buttonsStack.addArrangedSubview(updateButton)
+        if updateState.updateType == 3 && remainingSkipAttempts > 0 {
+            buttonsStack.addArrangedSubview(skipButton)
+        }
+        
+        view.addSubview(buttonsStack)
+        
+        // Constraints
+        NSLayoutConstraint.activate([
+            // Top header
+            topHeaderStack.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 20),
+            topHeaderStack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
+            topHeaderStack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+            
+            // Rocket icon
+            rocketImageView.widthAnchor.constraint(lessThanOrEqualToConstant: 300),
+            rocketImageView.heightAnchor.constraint(lessThanOrEqualToConstant: 300),
+            
+            // Content stack (centered vertically)
+            contentStack.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            contentStack.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+            contentStack.leadingAnchor.constraint(greaterThanOrEqualTo: view.leadingAnchor, constant: 20),
+            contentStack.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -20),
+            messageLabel.widthAnchor.constraint(lessThanOrEqualToConstant: 400),
+            
+            // Buttons at bottom
+            buttonsStack.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            buttonsStack.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -40),
+            buttonsStack.leadingAnchor.constraint(greaterThanOrEqualTo: view.leadingAnchor, constant: 40),
+            buttonsStack.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -40),
+            
+            updateButton.widthAnchor.constraint(equalToConstant: 300),
+            updateButton.heightAnchor.constraint(equalToConstant: 56),
+            
+            skipButton.widthAnchor.constraint(equalToConstant: 300),
+            skipButton.heightAnchor.constraint(equalToConstant: 44)
+        ])
+    }
+    private func setupNativeConstraints() {
         // Proportional width constraint (85% of screen)
         let proportionalWidth = containerView.widthAnchor.constraint(equalTo: view.widthAnchor, multiplier: 0.85)
         proportionalWidth.priority = .defaultHigh
         
-        NSLayoutConstraint.activate([
+        var constraints: [NSLayoutConstraint] = [
             // Overlay
             overlayView.topAnchor.constraint(equalTo: view.topAnchor),
             overlayView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
@@ -282,26 +426,33 @@ public class ReleazioUpdatePromptViewController: UIViewController {
             updateButton.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -20),
             updateButton.heightAnchor.constraint(equalToConstant: 50),
             updateButton.bottomAnchor.constraint(lessThanOrEqualTo: containerView.bottomAnchor, constant: -16),
-        ])
-        // Skip button
-        if updateState.updateType == 3 && remainingSkipAttempts > 0 {
-            skipButton.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 20).isActive = true
-            skipButton.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -20).isActive = true
-            skipButton.topAnchor.constraint(equalTo: updateButton.bottomAnchor, constant: 12).isActive = true
-            skipButton.heightAnchor.constraint(equalToConstant: 44).isActive = true
-            skipButton.bottomAnchor.constraint(equalTo: containerView.bottomAnchor, constant: -16).isActive = true
+        ]
+        // Skip button constraints (only if added to view)
+        if updateState.updateType == 3 && remainingSkipAttempts > 0 && skipButton.superview != nil {
+            constraints.append(contentsOf: [
+                skipButton.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 20),
+                skipButton.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -20),
+                skipButton.topAnchor.constraint(equalTo: updateButton.bottomAnchor, constant: 12),
+                skipButton.heightAnchor.constraint(equalToConstant: 44),
+                skipButton.bottomAnchor.constraint(equalTo: containerView.bottomAnchor, constant: -16)
+            ])
+            updateButton.bottomAnchor.constraint(lessThanOrEqualTo: skipButton.topAnchor, constant: -12).isActive = true
+        } else {
+            updateButton.bottomAnchor.constraint(lessThanOrEqualTo: containerView.bottomAnchor, constant: -16).isActive = true
         }
+        
+        NSLayoutConstraint.activate(constraints)
     }
     
     private func updateUI() {
-        
-        // Update skip button visibility
-        if updateState.updateType == 3 && remainingSkipAttempts > 0 {
-            skipButton.isHidden = false
-        } else {
-            skipButton.isHidden = true
+            // Update skip button visibility and title
+            if updateState.updateType == 3 && remainingSkipAttempts > 0 {
+                skipButton.isHidden = false
+                skipButton.setTitle(skipButtonText + " (\(remainingSkipAttempts))", for: .normal)
+            } else {
+                skipButton.isHidden = true
+            }
         }
-    }
     
     // MARK: - Computed Properties for Custom Strings and Colors
     
